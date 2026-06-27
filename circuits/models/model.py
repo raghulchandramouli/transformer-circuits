@@ -27,4 +27,30 @@ class SinusodialEncoding(nn.Module):
         x = x = self.pe[:x.size(1)].unsqueeze(0)
         return self.dropout(x)
     
-    
+
+class AttnetionOnlyBlock(nn.Module):
+    def __init__(self, n_embed, n_head, block_size, pos_pdrop=0.0, attn_pdrop=0.0):
+        super().__init__()
+        self.attn = nn.MultiheadAttention(
+            n_embed,
+            num_heads=n_head,
+            batch_first=True,
+            bias = False,
+            dropout=attn_pdrop
+        )
+
+        self.pos = SinusodialEncoding(d_model=n_embed, dropout=pos_pdrop, max_len=block_size)
+        self.ln  = nn.LayerNorm(n_embed)
+
+    def forward(self, x):
+        h_in = self.ln(x)
+
+        # POSITIONAL ENCODING AS PER SHORTFORMER
+        # https://aclanthology.org/2021.acl-long.427.pdf
+        px = self.pos(h_in)
+
+        # COMPUTE MASKED ATTENTION
+        mask = torch.triu(torch.ones(h_in.shape[1], h_in.shape[1], diagonal=1).bool().to(h_in.device))
+
+        h_out, _ = self.attn(query=px, key=px, value=h_in, attn_mask=mask)
+        return x + h_out
