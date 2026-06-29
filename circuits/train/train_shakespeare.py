@@ -3,6 +3,7 @@ import time
 from functools import partial
 
 import torch
+from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from yacs.config import CfgNode as CN
 
@@ -33,7 +34,7 @@ def get_config():
 
     # trainer
     C.trainer = Trainer.get_default_config()
-    C.trainer.device = 'cpu'  # set to 'mps' to try Apple GPU, or 'auto' for cuda
+    C.trainer.device = 'mps' if torch.backends.mps.is_available() else 'cpu'  # 'auto' for cuda
     C.trainer.block_size = 128
     C.trainer.batch_size = 32
     C.trainer.micro_batch_size = 32
@@ -53,18 +54,16 @@ def batch_end_callback(trainer, writer, config):
     if trainer.iter_num % 10 == 0:
         writer.add_scalar('train_loss', trainer.loss, trainer.iter_num)
         writer.add_scalar('learning_rate', trainer.current_lr, trainer.iter_num)
-        print(f"iter {trainer.iter_num} train loss: {trainer.loss.item():.4f} "
-              f"(lr {trainer.current_lr:.2e}, {trainer.iter_dt*1000:.0f}ms/iter)")
 
     if trainer.iter_num % 250 == 0:
         val_loss = trainer.validate()
         writer.add_scalar('val_loss', val_loss, trainer.iter_num)
-        print(f"iter {trainer.iter_num} val loss: {val_loss:.4f}")
+        tqdm.write(f"iter {trainer.iter_num} val loss: {val_loss:.4f}")
 
     if trainer.iter_num % 1000 == 0:
-        print('saving latest model at iter', trainer.iter_num)
         ckpt_path = os.path.join(config.system.work_dir, f"latest_model_{trainer.iter_num}.pt")
         torch.save(trainer.model.state_dict(), ckpt_path)
+        tqdm.write(f"saved checkpoint at iter {trainer.iter_num} -> {ckpt_path}")
 
 
 def train():

@@ -10,6 +10,7 @@ from collections import defaultdict
 import numpy as np
 import torch
 from torch.utils.data.dataloader import DataLoader
+from tqdm import tqdm
 
 from yacs.config import CfgNode as CN
 
@@ -132,6 +133,7 @@ class Trainer:
         self.iter_time = time.time()
 
         model.zero_grad(set_to_none=True)
+        pbar = tqdm(total=config.max_iters, desc='training')
         while True:
             if self.config.decay_lr:
                 self.current_lr = self.get_lr(self.iter_num)
@@ -154,6 +156,8 @@ class Trainer:
 
             self.trigger_callbacks('on_batch_end')
             self.iter_num += 1
+            pbar.update(1)
+            pbar.set_postfix(loss=f"{self.loss.item():.4f}", lr=f"{self.current_lr:.2e}")
             tnow = time.time()
             self.iter_dt = tnow - self.iter_time
             self.iter_time = tnow
@@ -161,6 +165,7 @@ class Trainer:
             # termination conditions
             if config.max_iters is not None and self.iter_num >= config.max_iters:
                 break
+        pbar.close()
 
     def validate(self):
         self.model.eval()
